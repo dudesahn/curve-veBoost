@@ -232,10 +232,9 @@ def _boost(_from: address, _to: address, _amount: uint256, _endtime: uint256):
 @external
 def boost(_to: address, _amount: uint256, _endtime: uint256, _from: address = msg.sender):
     # reduce approval if necessary
-    
-    # if the message sender is not delegating their own boost, make sure the "from" address has approved msg.sender for
-    #   enough tokens
     if _from != msg.sender:
+        # if the message sender is not delegating their own boost, make sure the "from" address has approved msg.sender
+        #  for enough tokens
         allowance: uint256 = self.allowance[_from][msg.sender]
         if allowance != MAX_UINT256:
             self.allowance[_from][msg.sender] = allowance - _amount
