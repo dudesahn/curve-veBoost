@@ -1,6 +1,6 @@
 # @version 0.3.3
 """
-@title Boost Delegation V3 - Sidechain Edition
+@title Boost Delegation V3 - Sidechain Edition w/ Overwrite
 @author CurveFi
 """
 
@@ -164,8 +164,11 @@ def _check_overwrite(_user: address) -> address:
     @notice Check if we need to override the ve balance of one address with another
     @param _user User address to check
     """
-    if overwrites[_user] != ZERO_ADDRESS:
-        _user = overwrites[_user]
+    userOverwrite: address = _user
+    if self.overwrites[_user] != ZERO_ADDRESS:
+        userOverwrite = self.overwrites[_user]
+    
+    return userOverwrite
 
 
 @view
@@ -173,32 +176,33 @@ def _check_overwrite(_user: address) -> address:
 def _balance_of(_user: address) -> uint256:
     
     # check for an overwrite
-    _user = _check_overwrite(_user)
+    userOverwrite: address = _user
+    userOverwrite = self._check_overwrite(_user)
 
-    amount: uint256 = VotingEscrow(VE).balanceOf(_user)
+    amount: uint256 = VotingEscrow(VE).balanceOf(userOverwrite)
 
-    point: Point = self._checkpoint_read(_user, True)
+    point: Point = self._checkpoint_read(userOverwrite, True)
     amount -= (point.bias - point.slope * (block.timestamp - point.ts))
 
-    point = self._checkpoint_read(_user, False)
+    point = self._checkpoint_read(userOverwrite, False)
     amount += (point.bias - point.slope * (block.timestamp - point.ts))
     return amount
 
 @internal
 def _boost(_from: address, _to: address, _amount: uint256, _endtime: uint256):
     # check for an overwrite
-    originalFrom: address _from
-    _from = _check_overwrite(_from)
+    fromOverwrite: address = _from
+    fromOverwrite = self._check_overwrite(_from)
     
-    assert _to not in [_from, ZERO_ADDRESS, originalFrom]
+    assert _to not in [_from, ZERO_ADDRESS, fromOverwrite]
     assert _amount != 0
     assert _endtime > block.timestamp
     assert _endtime % WEEK == 0
-    assert _endtime <= VotingEscrow(VE).locked(_from).end
+    assert _endtime <= VotingEscrow(VE).locked(fromOverwrite).end
 
     # checkpoint delegated point
-    point: Point = self._checkpoint_write(_from, True)
-    assert _amount <= VotingEscrow(VE).balanceOf(_from) - (point.bias - point.slope * (block.timestamp - point.ts))
+    point: Point = self._checkpoint_write(fromOverwrite, True)
+    assert _amount <= VotingEscrow(VE).balanceOf(fromOverwrite) - (point.bias - point.slope * (block.timestamp - point.ts))
 
     # calculate slope and bias being added
     slope: uint256 = _amount / (_endtime - block.timestamp)
@@ -209,8 +213,8 @@ def _boost(_from: address, _to: address, _amount: uint256, _endtime: uint256):
     point.slope += slope
 
     # store updated values
-    self.delegated[_from] = point
-    self.delegated_slope_changes[_from][_endtime] += slope
+    self.delegated[fromOverwrite] = point
+    self.delegated_slope_changes[fromOverwrite][_endtime] += slope
 
     # update received amount
     point = self._checkpoint_write(_to, False)
@@ -221,11 +225,11 @@ def _boost(_from: address, _to: address, _amount: uint256, _endtime: uint256):
     self.received[_to] = point
     self.received_slope_changes[_to][_endtime] += slope
 
-    log Transfer(_from, _to, _amount)
-    log Boost(_from, _to, bias, slope, block.timestamp)
+    log Transfer(fromOverwrite, _to, _amount)
+    log Boost(fromOverwrite, _to, bias, slope, block.timestamp)
 
     # also checkpoint received and delegated
-    self.received[_from] = self._checkpoint_write(_from, False)
+    self.received[fromOverwrite] = self._checkpoint_write(fromOverwrite, False)
     self.delegated[_to] = self._checkpoint_write(_to, True)
 
 
@@ -283,7 +287,7 @@ def permit(_owner: address, _spender: address, _value: uint256, _deadline: uint2
 @external
 def setOverwrite(_mainnetLocker: address, _localLocker: address):
     allowance: uint256 = self.allowance[_mainnetLocker][_localLocker]
-    overwrites[_localLocker] = _mainnetLocker
+    self.overwrites[_localLocker] = _mainnetLocker
     
     # if we use ZERO_ADDRESS, we are cancelling the overwrite
     if _mainnetLocker == ZERO_ADDRESS:
@@ -293,8 +297,8 @@ def setOverwrite(_mainnetLocker: address, _localLocker: address):
     else:
         # if we are overwriting, make sure our local address can spend the balance of our mainnet address
         if allowance != MAX_UINT256:
-            self.allowance[_mainnetLocker][_localLocker] = allowance - _amount
-            log Approval(_mainnetLocker, _localLocker, allowance - _amount)
+            self.allowance[_mainnetLocker][_localLocker] = MAX_UINT256
+            log Approval(_mainnetLocker, _localLocker, MAX_UINT256)
 
 
 @external
@@ -344,11 +348,13 @@ def received_balance(_user: address) -> uint256:
 @view
 @external
 def delegable_balance(_user: address) -> uint256:
-    # check for an overwrite
-    _user = _check_overwrite(_user)
     
-    point: Point = self._checkpoint_read(_user, True)
-    return VotingEscrow(VE).balanceOf(_user) - (point.bias - point.slope * (block.timestamp - point.ts))
+    # check for an overwrite
+    userOverwrite: address = _user
+    userOverwrite = self._check_overwrite(_user)
+    
+    point: Point = self._checkpoint_read(userOverwrite, True)
+    return VotingEscrow(VE).balanceOf(userOverwrite) - (point.bias - point.slope * (block.timestamp - point.ts))
 
 
 @pure
