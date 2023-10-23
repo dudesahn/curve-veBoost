@@ -72,6 +72,9 @@ contract MainnetVeOracleOptimism is Ownable2Step {
     /// Week in seconds
     uint256 constant WEEK = 1 weeks;
 
+    /// @notice Mapping of overwrites; mainnet address => L2 address
+    mapping(address => address) public overwrites;
+
     /**
      * @notice Update the Optimism veOracle for a given user.
      * @param _user The user whose data to push to Optimism's veOracle.
@@ -100,6 +103,9 @@ contract MainnetVeOracleOptimism is Ownable2Step {
         for (uint256 i = 0; i < 8; i++) {
             slopeChanges[i] = veCRV.slope_changes(startTime + WEEK * i);
         }
+
+        // check if we have an overwrite for the L2
+        _user = _checkOverwrite(_user);
 
         ovmL1CrossDomainMessenger.sendMessage(
             optimismVeOracle,
@@ -140,11 +146,39 @@ contract MainnetVeOracleOptimism is Ownable2Step {
     }
 
     /**
+     * @notice Check if an overwrite has been set for a given address on mainnet.
+     * @param _user The user to check if an overwrite has been set.
+     * @return userOverwrite Overwrite address if it exists, else input user address.
+     */
+    function _checkOverwrite(address _user)
+        internal
+        returns (address userOverwrite)
+    {
+        userOverwrite = _user;
+        if (overwrites[_user] != address(0)) {
+            userOverwrite = overwrites[_user];
+        }
+    }
+
+    /**
      * @notice Update the Optimism veOracle contract address.
      * @dev May only be called by owner.
      * @param _oracleAddress The address for our new veOracle on Optimism.
      */
     function setOptimismVeOracle(address _oracleAddress) external onlyOwner {
         optimismVeOracle = _oracleAddress;
+    }
+
+    /**
+     * @notice Maps the value of a mainnet veCRV lock to a different L2 address.
+     * @dev May only be called by owner.
+     * @param _mainnetLocker The address to read veCRV holdings from.
+     * @param _optimismLocker The address to map these veCRV holdings to on Optimism.
+     */
+    function setOverwrite(address _mainnetLocker, address _optimismLocker)
+        external
+        onlyOwner
+    {
+        overwrites[_mainnetLocker] = _optimismLocker;
     }
 }

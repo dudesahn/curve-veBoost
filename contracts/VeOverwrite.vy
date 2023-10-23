@@ -2,7 +2,9 @@
 """
 @title Boost Overwrite v1
 @author YearnFi
-@notice Check if we need to override the ve balance of one address with another, and report that to our veBOOST
+@notice Check if we need to override the ve balance of one address with another, and report that to our veBOOST. This
+ contract sits between our veBOOST and veOracle, reading through oracle values and updating as needed when an address
+ does have an overwrite.
 """
 
 
@@ -58,7 +60,6 @@ def setOverwrite(_mainnet_locker: address, _local_locker: address):
     @param _local_locker The address to overwrite with our mainnet veCRV balance.
     """
     assert msg.sender == self.governance
-    allowance: uint256 = self.allowance[_mainnet_locker][_local_locker]
     self.overwrites[_local_locker] = _mainnet_locker
     log Overwrite(_mainnet_locker, _local_locker)
 
