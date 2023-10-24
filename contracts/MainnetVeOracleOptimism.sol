@@ -55,7 +55,8 @@ interface IOptimismMessenger {
 /**
  * @title Mainnet veOracle Optimism
  * @notice This contract reads data from Curve's veCRV contract for a given user, and pushes that data to Optimism to be
- *  read and used for determining boost for Curve gauges on Optimism.
+ *  read and used for determining boost for Curve gauges on Optimism. Additionally, overwrites can be set for users such
+ *  that an L1 veCRV balance will be written to a different address on the L2.
  */
 contract MainnetVeOracleOptimism is Ownable2Step {
     /// @notice Ethereum veCRV contract; pull all of our info from here
@@ -72,14 +73,11 @@ contract MainnetVeOracleOptimism is Ownable2Step {
     /// Week in seconds
     uint256 constant WEEK = 1 weeks;
 
-    /// @notice Mapping of overwrites; mainnet address => L2 address
-    mapping(address => address) public overwrites;
-
     /**
-     * @notice Update the Optimism veOracle for a given user.
-     * @param _user The user whose data to push to Optimism's veOracle.
+     * @notice Update the state of the Optimism veOracle for a given user.
+     * @param _user The user whose L1 veCRV state to push to veOracle on Optimism.
      */
-    function updateOptimismVeOracle(address _user) external {
+    function pushVeOracleUpdateOptimism(address _user) public {
         if (optimismVeOracle == address(0)) {
             revert("Set optimismVeOracle address first");
         }
@@ -104,9 +102,7 @@ contract MainnetVeOracleOptimism is Ownable2Step {
             slopeChanges[i] = veCRV.slope_changes(startTime + WEEK * i);
         }
 
-        // check if we have an overwrite for the L2
-        _user = _checkOverwrite(_user);
-
+        // this call will change based on the L2 we are pushing the message to
         ovmL1CrossDomainMessenger.sendMessage(
             optimismVeOracle,
             abi.encodeWithSignature(
@@ -146,39 +142,11 @@ contract MainnetVeOracleOptimism is Ownable2Step {
     }
 
     /**
-     * @notice Check if an overwrite has been set for a given address on mainnet.
-     * @param _user The user to check if an overwrite has been set.
-     * @return userOverwrite Overwrite address if it exists, else input user address.
-     */
-    function _checkOverwrite(address _user)
-        internal
-        returns (address userOverwrite)
-    {
-        userOverwrite = _user;
-        if (overwrites[_user] != address(0)) {
-            userOverwrite = overwrites[_user];
-        }
-    }
-
-    /**
      * @notice Update the Optimism veOracle contract address.
      * @dev May only be called by owner.
      * @param _oracleAddress The address for our new veOracle on Optimism.
      */
-    function setOptimismVeOracle(address _oracleAddress) external onlyOwner {
+    function setVeOracleOptimism(address _oracleAddress) external onlyOwner {
         optimismVeOracle = _oracleAddress;
-    }
-
-    /**
-     * @notice Maps the value of a mainnet veCRV lock to a different L2 address.
-     * @dev May only be called by owner.
-     * @param _mainnetLocker The address to read veCRV holdings from.
-     * @param _optimismLocker The address to map these veCRV holdings to on Optimism.
-     */
-    function setOverwrite(address _mainnetLocker, address _optimismLocker)
-        external
-        onlyOwner
-    {
-        overwrites[_mainnetLocker] = _optimismLocker;
     }
 }

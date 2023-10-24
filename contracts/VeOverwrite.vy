@@ -33,12 +33,14 @@ struct LockedBalance:
 NAME: constant(String[32]) = "Vote-Escrowed Overwrite"
 SYMBOL: constant(String[8]) = "veOverwrite"
 VERSION: constant(String[8]) = "v1.0.0"
+DEAD_ADDRESS: constant(address) = 0x000000000000000000000000000000000000dEaD
 
 VE: immutable(address)
 governance: public(address)
 pendingGovernance: address
 
-overwrites: public(HashMap[address, address])
+overwriteBalanceOfUserWith: public(HashMap[address, address])
+mainnetLockerOverwriteTo: public(HashMap[address, address])
 
 @external
 def __init__(_ve: address, _governance: address):
@@ -48,20 +50,35 @@ def __init__(_ve: address, _governance: address):
 
 
 @external
-def setOverwrite(_mainnet_locker: address, _local_locker: address):
+def setOverwrite(_mainnetLocker: address, _localLocker: address):
     """
     @notice
-        Creates an overwrite for the given address. Local address will be treated
-        as if it has the veCRV balance of the mainnet address. Especially useful
-        if a mainnet locker cannot be accessed on other chains. 
+        Creates an overwrite for the given address. Local address will be treated as if it has the veCRV balance of the
+        mainnet address. Especially useful if a mainnet locker cannot be accessed on other chains.
+        
+        To "reclaim" the boost owned by a given L1 address to be used by the same L2 address, pass ZERO_ADDRESS as the
+        _localLocker.
 
         This may only be called by governance.
-    @param _mainnet_locker The address to check for veCRV balance.
-    @param _local_locker The address to overwrite with our mainnet veCRV balance.
+    @param _mainnetLocker The address to check for veCRV balance.
+    @param _localLocker The address to overwrite with our mainnet veCRV balance.
     """
     assert msg.sender == self.governance
-    self.overwrites[_local_locker] = _mainnet_locker
-    log Overwrite(_mainnet_locker, _local_locker)
+    
+    # check if mainnet address is already overwriting another address
+    current_overwrite_recipient: address = mainnetLockerOverwriteTo[_mainnetLocker]
+    
+    if current_overwrite_recipient != ZERO_ADDRESS:
+        # if _mainnetLocker is currently overwriting another address, sever the link between the two
+        overwriteBalanceOfUserWith[current_overwrite_recipient] = ZERO_ADDRESS
+    else:
+        # overwrite our _mainnetLocker address with zero balance, but only if it isn't already zeroed
+        overwriteBalanceOfUserWith[_mainnetLocker] = DEAD_ADDRESS;
+    
+    # now do the core overwrites
+    self.mainnetLockerOverwriteTo[_mainnetLocker] = _localLocker
+    self.overwriteBalanceOfUserWith[_local_locker] = _mainnet_locker
+    log Overwrite(_mainnetLocker, _localLocker)
 
 
 # 2-phase commit for a change in governance
@@ -71,9 +88,8 @@ def setGovernance(governance: address):
     @notice
         Nominate a new address to use as governance.
 
-        The change does not go into effect immediately. This function sets a
-        pending change, and the governance address is not updated until
-        the proposed governance address has accepted the responsibility.
+        The change does not go into effect immediately. This function sets a pending change, and the governance address
+        is not updated until he proposed governance address has accepted the responsibility.
 
         This may only be called by the current governance address.
     @param governance The address requested to take over governance.
@@ -87,14 +103,12 @@ def setGovernance(governance: address):
 def acceptGovernance():
     """
     @notice
-        Once a new governance address has been proposed using setGovernance(),
-        this function may be called by the proposed address to accept the
-        responsibility of taking over governance for this contract.
+        Once a new governance address has been proposed using setGovernance(), this function may be called by the
+        proposed address to accept the responsibility of taking over governance for this contract.
 
         This may only be called by the proposed governance address.
     @dev
-        setGovernance() should be called by the existing governance address,
-        prior to calling this function.
+        setGovernance() should be called by the existing governance address, prior to calling this function.
     """
     assert msg.sender == self.pendingGovernance
     self.governance = msg.sender
@@ -109,8 +123,8 @@ def _check_overwrite(_user: address) -> address:
     @param _user User address to check
     """
     user_overwrite: address = _user
-    if self.overwrites[_user] != ZERO_ADDRESS:
-        user_overwrite = self.overwrites[_user]
+    if self.overwriteBalanceOfUserWith[_user] != ZERO_ADDRESS:
+        user_overwrite = self.overwriteBalanceOfUserWith[_user]
     
     return user_overwrite
 

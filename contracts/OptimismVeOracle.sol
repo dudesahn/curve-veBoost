@@ -36,9 +36,11 @@ contract OptimismVeOracle is Ownable2Step {
 
     /// Migrated `VotingEscrow` storage variables
     uint256 public epoch;
-    Point[100000000000000000000000000000] public point_history;
     mapping(address => uint256) public user_point_epoch;
-    mapping(address => Point[1000000000]) public user_point_history;
+    
+    // update these to mappings
+    mapping(uint256 => Point) public point_history;
+    mapping(address => mapping(uint256 => Point)) public user_point_history;
 
     mapping(uint256 => int128) public slope_changes;
     mapping(address => LockedBalance) public locked;
@@ -125,7 +127,7 @@ contract OptimismVeOracle is Ownable2Step {
         LockedBalance memory _userLockedStruct,
         uint256 _userEpoch,
         Point memory _userPointStruct
-    ) external {
+    ) external onlyMainnetVeOracle {
         // always set the point_history structs
         point_history[_epoch] = _globalPointStruct;
         user_point_history[_user][_userEpoch] = _userPointStruct;
