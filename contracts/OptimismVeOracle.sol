@@ -37,7 +37,7 @@ contract OptimismVeOracle is Ownable2Step {
     /// Migrated `VotingEscrow` storage variables
     uint256 public epoch;
     mapping(address => uint256) public user_point_epoch;
-    
+
     // update these to mappings
     mapping(uint256 => Point) public point_history;
     mapping(address => mapping(uint256 => Point)) public user_point_history;
@@ -119,7 +119,7 @@ contract OptimismVeOracle is Ownable2Step {
     }
 
     // make sure to add back the onlyMainnetVeOracle once done with this testing
-    function submit_state(
+    function submitState(
         uint256 _epoch,
         Point memory _globalPointStruct,
         int128[8] memory _slopeChangeArray,

@@ -15,8 +15,8 @@ interface VotingEscrow:
 
 
 event Overwrite:
-    _mainnet_locker: indexed(address)
-    _local_locker: indexed(address)
+    _mainnetLocker: indexed(address)
+    _localLocker: indexed(address)
 
 event UpdateGovernance:
     governance: address # New active governance
@@ -31,7 +31,7 @@ struct LockedBalance:
 
 
 NAME: constant(String[32]) = "Vote-Escrowed Overwrite"
-SYMBOL: constant(String[8]) = "veOverwrite"
+SYMBOL: constant(String[16]) = "veOverwrite"
 VERSION: constant(String[8]) = "v1.0.0"
 DEAD_ADDRESS: constant(address) = 0x000000000000000000000000000000000000dEaD
 
@@ -39,7 +39,10 @@ VE: immutable(address)
 governance: public(address)
 pendingGovernance: address
 
+# L2 addrress => mainnet address
 overwriteBalanceOfUserWith: public(HashMap[address, address])
+
+# mainnet addrress => L2 address
 mainnetLockerOverwriteTo: public(HashMap[address, address])
 
 @external
@@ -63,21 +66,27 @@ def setOverwrite(_mainnetLocker: address, _localLocker: address):
     @param _mainnetLocker The address to check for veCRV balance.
     @param _localLocker The address to overwrite with our mainnet veCRV balance.
     """
-    assert msg.sender == self.governance
+    assert msg.sender == self.governance, "Only governance can call"
+    assert self.overwriteBalanceOfUserWith[_localLocker] != _mainnetLocker, "This overwrite is already set"
     
-    # check if mainnet address is already overwriting another address
-    current_overwrite_recipient: address = mainnetLockerOverwriteTo[_mainnetLocker]
+    # check if another mainnet address is currently delegating to this _localLocker
+    current_overwrite_to_localLocker: address = self.overwriteBalanceOfUserWith[_localLocker]
+    if current_overwrite_to_localLocker != ZERO_ADDRESS:
+        self.overwriteBalanceOfUserWith[current_overwrite_to_localLocker] = ZERO_ADDRESS
+    
+    # check if _mainnetLocker address is already overwriting another address
+    current_overwrite_recipient: address = self.mainnetLockerOverwriteTo[_mainnetLocker]
     
     if current_overwrite_recipient != ZERO_ADDRESS:
         # if _mainnetLocker is currently overwriting another address, sever the link between the two
-        overwriteBalanceOfUserWith[current_overwrite_recipient] = ZERO_ADDRESS
+        self.overwriteBalanceOfUserWith[current_overwrite_recipient] = ZERO_ADDRESS
     else:
         # overwrite our _mainnetLocker address with zero balance, but only if it isn't already zeroed
-        overwriteBalanceOfUserWith[_mainnetLocker] = DEAD_ADDRESS;
+        self.overwriteBalanceOfUserWith[_mainnetLocker] = DEAD_ADDRESS
     
     # now do the core overwrites
+    self.overwriteBalanceOfUserWith[_localLocker] = _mainnetLocker
     self.mainnetLockerOverwriteTo[_mainnetLocker] = _localLocker
-    self.overwriteBalanceOfUserWith[_local_locker] = _mainnet_locker
     log Overwrite(_mainnetLocker, _localLocker)
 
 
@@ -94,7 +103,7 @@ def setGovernance(governance: address):
         This may only be called by the current governance address.
     @param governance The address requested to take over governance.
     """
-    assert msg.sender == self.governance
+    assert msg.sender == self.governance, "Only governance can call"
     log NewPendingGovernance(governance)
     self.pendingGovernance = governance
 
@@ -110,7 +119,7 @@ def acceptGovernance():
     @dev
         setGovernance() should be called by the existing governance address, prior to calling this function.
     """
-    assert msg.sender == self.pendingGovernance
+    assert msg.sender == self.governance, "Only pendingGovernance can call"
     self.governance = msg.sender
     log UpdateGovernance(msg.sender)
 
@@ -169,7 +178,7 @@ def name() -> String[32]:
 
 @pure
 @external
-def symbol() -> String[8]:
+def symbol() -> String[16]:
     return SYMBOL
 
 

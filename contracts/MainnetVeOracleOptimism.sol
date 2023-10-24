@@ -32,18 +32,6 @@ interface IVeCrv {
         returns (Point memory);
 }
 
-interface IOracle is IVeCrv {
-    function submit_state(
-        uint256 _epoch,
-        Point memory _globalPointStruct,
-        int128[8] memory _slopeChangeArray,
-        address _user,
-        LockedBalance memory _userLockedStruct,
-        uint256 _userEpoch,
-        Point memory _userPointStruct
-    ) external;
-}
-
 interface IOptimismMessenger {
     function sendMessage(
         address _target,
@@ -106,7 +94,7 @@ contract MainnetVeOracleOptimism is Ownable2Step {
         ovmL1CrossDomainMessenger.sendMessage(
             optimismVeOracle,
             abi.encodeWithSignature(
-                "submit_state(uint256,(int128,int128,uint256,uint256),int128[8],address,(int128,uint256),uint256,(int128,int128,uint256,uint256))",
+                "submitState(uint256,(int128,int128,uint256,uint256),int128[8],address,(int128,uint256),uint256,(int128,int128,uint256,uint256))",
                 currentEpoch,
                 globalPointStruct,
                 slopeChanges,
